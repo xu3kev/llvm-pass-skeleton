@@ -22,6 +22,20 @@ int istwopower(int x){
   return -1;
 }
 
+void strengthReduction(BinaryOperator *bop, Constant *c, Value *v){
+    int x = c->getUniqueInteger().getLimitedValue();
+    errs()<<x<<"\n";
+    int e = istwopower(x);
+    errs()<<e<<"\n";
+    IRBuilder<> builder(bop);
+    Value* shift = builder.CreateLShr(v, e);
+    for (auto& U: bop->uses()){
+        User* user = U.getUser();
+        user->setOperand(U.getOperandNo(), shift);
+    }
+    bop->eraseFromParent();
+}
+
 namespace {
   struct SkeletonPass : public FunctionPass {
     static char ID;
@@ -45,38 +59,19 @@ namespace {
                     Value *rhs = bop->getOperand(1);
                     errs() << *lhs << "\n";
                     errs() << *rhs << "\n";
-                    IRBuilder<> builder(bop);
 
                     Constant *C;
                     C=dyn_cast<Constant>(rhs);
                     if(C){
                         errs()<<"rhs is constant\n";
-                        int x = C->getUniqueInteger().getLimitedValue();
-                        errs()<<x<<"\n";
-                        int e = istwopower(x);
-                        errs()<<e<<"\n";
-                        Value* shift = builder.CreateLShr(lhs, e);
-                        for (auto& U: bop->uses()){
-                            User* user = U.getUser();
-                            user->setOperand(U.getOperandNo(), shift);
-                        }
-                        bop->eraseFromParent();
+                        strengthReduction(bop, C, lhs);
+                        return true;
                     }
-                    else{
-                        C=dyn_cast<Constant>(lhs);
-                        if(C){
-                            errs()<<"lhs is constant\n";
-                            int x = C->getUniqueInteger().getLimitedValue();
-                            errs()<<x<<"\n";
-                            int e = istwopower(x);
-                            errs()<<e<<"\n";
-                            Value* shift = builder.CreateLShr(rhs, e);
-                            for (auto& U: bop->uses()){
-                                User* user = U.getUser();
-                                user->setOperand(U.getOperandNo(), shift);
-                            }
-                            bop->eraseFromParent();
-                        }
+                    C=dyn_cast<Constant>(lhs);
+                    if(C){
+                        errs()<<"lhs is constant\n";
+                        strengthReduction(bop, C, rhs);
+                        return true;
                     }
                 }
             }
