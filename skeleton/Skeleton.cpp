@@ -33,7 +33,7 @@ void strengthReduction(BinaryOperator *bop, Constant *c, Value *v){
     int e = istwopower(x);
     errs()<<e<<"\n";
     IRBuilder<> builder(bop);
-    Value *shift = builder.CreateLShr(v, e);
+    Value *shift = builder.CreateShl(v, e);
     if(neg)
         shift = builder.CreateNeg(shift);
     for (auto& U: bop->uses()){
