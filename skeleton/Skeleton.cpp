@@ -3,7 +3,24 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
+
+// tips copy from the doc top webpage
+#include "llvm/IR/InstrTypes.h"
+#include "llvm/IR/IRBuilder.h"
 using namespace llvm;
+
+int istwopower(int x){
+  if(x>0 &&((x&(x-1))==0)){
+     int i=0;
+     while(!(x&1)){
+        ++i;
+        x>>=1;
+     }
+     return i;
+  }
+  return -1;
+}
 
 namespace {
   struct SkeletonPass : public FunctionPass {
@@ -12,6 +29,55 @@ namespace {
 
     virtual bool runOnFunction(Function &F) {
       errs() << "I saw a function called " << F.getName() << "!\n";
+      for (auto &B : F){
+        errs() << "a block\n";
+        for (auto &I : B){
+            BinaryOperator *bop = dyn_cast<BinaryOperator>(&I);
+            if(bop){
+                errs() << "it's binary operator\n";
+                if (bop->getOpcode() == Instruction::Mul){
+                    errs() << "it's mul operator\n";
+
+                    Value *lhs = bop->getOperand(0);
+                    Value *rhs = bop->getOperand(1);
+                    errs() << *lhs << "\n";
+                    errs() << *rhs << "\n";
+                    IRBuilder<> builder(bop);
+
+                    Constant *C;
+                    C=dyn_cast<Constant>(rhs);
+                    if(C){
+                        errs()<<"rhs is constant\n";
+                        int x = C->getUniqueInteger().getLimitedValue();
+                        errs()<<x<<"\n";
+                        int e = istwopower(x);
+                        errs()<<e<<"\n";
+                        Value* shift = builder.CreateLShr(lhs, e);
+                        for (auto& U: bop->uses()){
+                            User* user = U.getUser();
+                            user->setOperand(U.getOperandNo(), shift);
+                        }
+                    }
+                    else{
+                        C=dyn_cast<Constant>(lhs);
+                        if(C){
+                            errs()<<"lhs is constant\n";
+                            int x = C->getUniqueInteger().getLimitedValue();
+                            errs()<<x<<"\n";
+                            int e = istwopower(x);
+                            errs()<<e<<"\n";
+                            Value* shift = builder.CreateLShr(rhs, e);
+                            for (auto& U: bop->uses()){
+                                User* user = U.getUser();
+                                user->setOperand(U.getOperandNo(), shift);
+                            }
+                        }
+                    }
+                }
+            }
+            errs() << "an instruction: " << I << "\n";
+        }
+      }
       return false;
     }
   };
