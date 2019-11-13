@@ -43,39 +43,40 @@ namespace {
 
     virtual bool runOnFunction(Function &F) {
       errs() << "I saw a function called " << F.getName() << "!\n";
+      bool ret = false;
       for (auto &B : F){
-        errs() << "a block\n";
-        //for (auto &I : B){
-        for (BasicBlock::iterator DI = B.begin(); DI != B.end(); ) {
-            Instruction *I = &*DI++;
-            errs() << "an instruction: " << *I << "\n";
-            BinaryOperator *bop = dyn_cast<BinaryOperator>(I);
-            if(bop){
-                errs() << "it's binary operator\n";
-                if (bop->getOpcode() == Instruction::Mul){
-                    errs() << "it's mul operator\n";
+          errs() << "a block\n";
+          //for (auto &I : B){
+          for (BasicBlock::iterator DI = B.begin(); DI != B.end(); ) {
+              Instruction *I = &*DI++;
+              errs() << "an instruction: " << *I << "\n";
+              BinaryOperator *bop = dyn_cast<BinaryOperator>(I);
+              if(bop){
+                  errs() << "it's binary operator\n";
+                  if (bop->getOpcode() == Instruction::Mul){
+                      errs() << "it's mul operator\n";
 
-                    Value *lhs = bop->getOperand(0);
-                    Value *rhs = bop->getOperand(1);
-                    errs() << *lhs << "\n";
-                    errs() << *rhs << "\n";
+                      Value *lhs = bop->getOperand(0);
+                      Value *rhs = bop->getOperand(1);
+                      errs() << *lhs << "\n";
+                      errs() << *rhs << "\n";
 
-                    Constant *C;
-                    C=dyn_cast<Constant>(rhs);
-                    if(C){
-                        errs()<<"rhs is constant\n";
-                        strengthReduction(bop, C, lhs);
-                        return true;
-                    }
-                    C=dyn_cast<Constant>(lhs);
-                    if(C){
-                        errs()<<"lhs is constant\n";
-                        strengthReduction(bop, C, rhs);
-                        return true;
-                    }
-                }
-            }
-        }
+                      Constant *C;
+                      C=dyn_cast<Constant>(rhs);
+                      if(C){
+                          errs()<<"rhs is constant\n";
+                          strengthReduction(bop, C, lhs);
+                          ret = true;
+                      }
+                      C=dyn_cast<Constant>(lhs);
+                      if(C){
+                          errs()<<"lhs is constant\n";
+                          strengthReduction(bop, C, rhs);
+                          ret = true;
+                      }
+                  }
+              }
+          }
       }
       return false;
     }
