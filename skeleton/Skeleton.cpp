@@ -5,10 +5,71 @@
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 
+#include <iostream>
+#include <string>
+#include <vector>
+
 // tips copy from the doc top webpage
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/IRBuilder.h"
 using namespace llvm;
+
+// costs is vector of costs of +/-, *, /, <</>>
+std::vector <std::pair <std::string, int> > mul_reduction(unsigned int factor, 
+        std::vector <unsigned int> costs) 
+{
+    std::vector <std::pair <std::string, int> > result;
+
+    unsigned int cost_plus = 0;
+    unsigned int cost_minus = 0;
+
+    std::vector <int> plus, minus;
+    unsigned int len = 0;
+    for (int k = 0, f = factor; f; k ++, f >>= 1) {
+        if (f & 1) {
+            plus.push_back(k);
+            if (k == 0) cost_plus -= costs[3];
+        }
+        len ++;
+    }
+
+    for (int k = 0, f = (1 << len) - factor; f; k ++, f >>= 1) {
+        if (f & 1) {
+            minus.push_back(k);
+            if (k == 0) cost_minus -= costs[3];
+        }
+    }
+
+    cost_plus += plus.size() * (costs[0] + costs[3]) - costs[0];
+    cost_minus += minus.size() * (costs[0] + costs[3]) + costs[3];
+
+    /*
+    std::cerr << cost_plus << std::endl;
+        std::cerr << "<< " << plus[0] << std::endl;
+    for (int i = 1; i < plus.size(); i ++) 
+        std::cerr << "+ << " << plus[i] << std::endl;
+    
+    std::cerr << cost_minus << std::endl;
+    std::cerr << "<< " << len << std::endl;
+    for (int i = 0; i < minus.size(); i ++) 
+        std::cerr << "- << " << minus[i] << std::endl;
+    */
+
+    if (cost_plus <= cost_minus) {
+        result.push_back(std::make_pair("cost", cost_plus);
+        result.push_back(std::make_pair("=", plus[0]));
+        for (int i = 1; i < plus.size(); i ++)
+            result.push_back(std::make_pair("+", plus[i]));
+    }
+    else {
+        result.push_back(std::make_pair("cost", cost_minus);
+        result.push_back(std::make_pair("=", len));
+        for (int i = 0; i < plus.size(); i ++)
+            result.push_back(std::make_pair("-", plus[i]));
+    }
+
+    return result;
+}
 
 int istwopower(int x){
     if(x>0 &&((x&(x-1))==0)){
