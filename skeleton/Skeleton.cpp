@@ -25,10 +25,17 @@ int istwopower(int x){
 void strengthReduction(BinaryOperator *bop, Constant *c, Value *v){
     int x = c->getUniqueInteger().getLimitedValue();
     errs()<<x<<"\n";
+    bool neg=false;
+    if(x<0){
+        neg = true;
+        x = -x;
+    }
     int e = istwopower(x);
     errs()<<e<<"\n";
     IRBuilder<> builder(bop);
-    Value* shift = builder.CreateLShr(v, e);
+    Value *shift = builder.CreateLShr(v, e);
+    if(neg)
+        shift = builder.CreateNeg(shift);
     for (auto& U: bop->uses()){
         User* user = U.getUser();
         user->setOperand(U.getOperandNo(), shift);
