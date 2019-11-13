@@ -31,8 +31,11 @@ namespace {
       errs() << "I saw a function called " << F.getName() << "!\n";
       for (auto &B : F){
         errs() << "a block\n";
-        for (auto &I : B){
-            BinaryOperator *bop = dyn_cast<BinaryOperator>(&I);
+        //for (auto &I : B){
+        for (BasicBlock::iterator DI = B.begin(); DI != B.end(); ) {
+            Instruction *I = &*DI++;
+            errs() << "an instruction: " << *I << "\n";
+            BinaryOperator *bop = dyn_cast<BinaryOperator>(I);
             if(bop){
                 errs() << "it's binary operator\n";
                 if (bop->getOpcode() == Instruction::Mul){
@@ -57,6 +60,7 @@ namespace {
                             User* user = U.getUser();
                             user->setOperand(U.getOperandNo(), shift);
                         }
+                        bop->eraseFromParent();
                     }
                     else{
                         C=dyn_cast<Constant>(lhs);
@@ -71,11 +75,11 @@ namespace {
                                 User* user = U.getUser();
                                 user->setOperand(U.getOperandNo(), shift);
                             }
+                            bop->eraseFromParent();
                         }
                     }
                 }
             }
-            errs() << "an instruction: " << I << "\n";
         }
       }
       return false;
