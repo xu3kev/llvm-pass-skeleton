@@ -132,6 +132,7 @@ namespace {
         GlobalVariable *bbCounter = NULL;
         GlobalVariable *BasicBlockPrintfFormatStr = NULL;
         Function *printf_func = NULL;
+        Value *format = NULL;
         SkeletonPass() : FunctionPass(ID) {}
         void addFinalPrintf(BasicBlock& BB, LLVMContext *Context, GlobalVariable *bbCounter, GlobalVariable *var, Function *printf_func) {
             IRBuilder<> builder(BB.getTerminator()); // Insert BEFORE the final statement
@@ -143,7 +144,7 @@ namespace {
 
             Value *bbc = builder.CreateLoad(bbCounter);
             std::vector<Value *> print_args;
-            print_args.push_back(var_ref);
+            print_args.push_back(format);
             print_args.push_back(bbc);
             CallInst *call = builder.CreateCall(printf_func, print_args);
             call->setTailCall(false);
@@ -154,6 +155,9 @@ namespace {
             Context = &M.getContext();
             bbCounter = new GlobalVariable(M, Type::getInt32Ty(*Context), false, GlobalValue::InternalLinkage, ConstantInt::get(Type::getInt32Ty(*Context), 0), "bbCounter");
             const char *finalPrintString = "BB Count: %d\n";
+            IRBuilder<> builder(*Context);
+            format = builder.CreateGlobalStringPtr("%d\n", "str");
+
             Constant *format_const = ConstantDataArray::getString(*Context, finalPrintString);
             BasicBlockPrintfFormatStr = new GlobalVariable(M, llvm::ArrayType::get(llvm::IntegerType::get(*Context, 8), strlen(finalPrintString)+1), true, llvm::GlobalValue::PrivateLinkage, format_const, "BasicBlockPrintfFormatStr");
             printf_func = printf_prototype(*Context, &M);
