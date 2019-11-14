@@ -21,8 +21,8 @@
 using namespace llvm;
 
 // costs is vector of costs of +/-, *, /, <</>>
-std::vector<unsigned int> costs = {3,5,10,1};
-int mul_reduction(unsigned int factor) 
+std::vector<unsigned int> COSTS = {3,5,10,1};
+std::vector<int> mul_reduction(unsigned int factor) 
 {
     std::vector <std::pair <std::string, int> > result;
 
@@ -34,7 +34,7 @@ int mul_reduction(unsigned int factor)
     for (int k = 0, f = factor; f; k ++, f >>= 1) {
         if (f & 1) {
             plus.push_back(k);
-            if (k == 0) cost_plus -= costs[3];
+            if (k == 0) cost_plus -= COSTS[3];
         }
         len ++;
     }
@@ -42,12 +42,12 @@ int mul_reduction(unsigned int factor)
     for (int k = 0, f = (1 << len) - factor; f; k ++, f >>= 1) {
         if (f & 1) {
             minus.push_back(k);
-            if (k == 0) cost_minus -= costs[3];
+            if (k == 0) cost_minus -= COSTS[3];
         }
     }
 
-    cost_plus += plus.size() * (costs[0] + costs[3]) - costs[0];
-    cost_minus += minus.size() * (costs[0] + costs[3]) + costs[3];
+    cost_plus += plus.size() * (COSTS[0] + COSTS[3]) - COSTS[0];
+    cost_minus += minus.size() * (COSTS[0] + COSTS[3]) + COSTS[3];
 
     /*
     std::cerr << cost_plus << std::endl;
@@ -74,8 +74,12 @@ int mul_reduction(unsigned int factor)
             result.push_back(std::make_pair("-", plus[i]));
     }
 
-    int ret = costs[1] - result[0].second;
-    return (ret > 0)? ret : 0;
+    int cost_before = COSTS[1];
+    int cost_after = COSTS[1] < result[0].second ? COSTS[1]:result[0].second;
+    std::vector<int> ret;
+    ret.push_back(cost_before);
+    ret.push_back(cost_after);
+    return ret;
 }
 
 int istwopower(int x){
@@ -108,6 +112,7 @@ namespace {
         static char ID;
         LLVMContext *Context;
         GlobalVariable *bbCounter = NULL;
+        GlobalVariable *ccCounter = NULL;
         GlobalVariable *BasicBlockPrintfFormatStr = NULL;
         Function *printf_func = NULL;
         Value *format = NULL;
@@ -115,11 +120,15 @@ namespace {
         void strengthReduction(BinaryOperator *bop, Constant *c, Value *v){
             errs()<<"insert\n";
             int x = c->getUniqueInteger().getLimitedValue();
-            int savings = mul_reduction(x);
+            std::vector<int> costs = mul_reduction(x);
             IRBuilder<> IRB(bop);
             Value *loadAddr = IRB.CreateLoad(bbCounter);
-            Value *addAddr = IRB.CreateAdd(ConstantInt::get(Type::getInt32Ty(*Context), savings), loadAddr);
+            Value *addAddr = IRB.CreateAdd(ConstantInt::get(Type::getInt32Ty(*Context), costs[0]), loadAddr);
             IRB.CreateStore(addAddr, bbCounter);
+
+            Value *loadAddr2 = IRB.CreateLoad(ccCounter);
+            Value *addAddr2 = IRB.CreateAdd(ConstantInt::get(Type::getInt32Ty(*Context), costs[1]), loadAddr2);
+            IRB.CreateStore(addAddr2, ccCounter);
             
 
             return;
@@ -141,19 +150,21 @@ namespace {
             //}
             //bop->eraseFromParent();
         }
-        void addFinalPrintf(BasicBlock& BB, LLVMContext *Context, GlobalVariable *bbCounter, GlobalVariable *var, Function *printf_func) {
+        void addFinalPrintf(BasicBlock& BB, LLVMContext *Context, GlobalVariable *bbCounter, GlobalVariable *ccCounter, GlobalVariable *var, Function *printf_func) {
             IRBuilder<> builder(BB.getTerminator()); // Insert BEFORE the final statement
             std::vector<Constant*> indices;
             //Constant *zero = Constant::getNullValue(IntegerType::getInt32Ty(*Context));
             //indices.push_back(zero);
             //indices.push_back(zero);
             //Constant *var_ref = ConstantExpr::getGetElementPtr(var->getType(), var, indices);
-            format = builder.CreateGlobalStringPtr("!!! %d\n", "str");
+            format = builder.CreateGlobalStringPtr("!!! %d %d\n", "str");
 
             Value *bbc = builder.CreateLoad(bbCounter);
+            Value *ccc = builder.CreateLoad(ccCounter);
             std::vector<Value *> print_args;
             print_args.push_back(format);
             print_args.push_back(bbc);
+            print_args.push_back(ccc);
             CallInst *call = builder.CreateCall(printf_func, print_args);
             call->setTailCall(false);
             
@@ -162,7 +173,8 @@ namespace {
             errs() << "\n---------Starting BasicBlockDemo---------\n";
             Context = &M.getContext();
             bbCounter = new GlobalVariable(M, Type::getInt32Ty(*Context), false, GlobalValue::InternalLinkage, ConstantInt::get(Type::getInt32Ty(*Context), 0), "bbCounter");
-            const char *finalPrintString = "BB Count: %d\n";
+            ccCounter = new GlobalVariable(M, Type::getInt32Ty(*Context), false, GlobalValue::InternalLinkage, ConstantInt::get(Type::getInt32Ty(*Context), 0), "ccCounter");
+            //const char *finalPrintString = "BB Count: %d\n";
 
             //Constant *format_const = ConstantDataArray::getString(*Context, finalPrintString);
             //BasicBlockPrintfFormatStr = new GlobalVariable(M, llvm::ArrayType::get(llvm::IntegerType::get(*Context, 8), strlen(finalPrintString)+1), true, llvm::GlobalValue::PrivateLinkage, format_const, "BasicBlockPrintfFormatStr");
@@ -179,7 +191,7 @@ namespace {
             for (auto &B : F){
                 errs() << "a block\n";
                 if(F.getName().equals("main") && isa<ReturnInst>(B.getTerminator())) { // major hack?
-                    addFinalPrintf(B, Context, bbCounter, BasicBlockPrintfFormatStr, printf_func);
+                    addFinalPrintf(B, Context, bbCounter, ccCounter, BasicBlockPrintfFormatStr, printf_func);
                 }
                 for (BasicBlock::iterator DI = B.begin(); DI != B.end(); ) {
                     Instruction *I = &*DI++;
