@@ -90,28 +90,6 @@ int istwopower(int x){
     return -1;
 }
 
-void strengthReduction(BinaryOperator *bop, Constant *c, Value *v){
-    int x = c->getUniqueInteger().getLimitedValue();
-    int savings = mul_reduction(x);
-
-    errs()<<x<<"\n";
-    bool neg=false;
-    if(x<0){
-        neg = true;
-        x = -x;
-    }
-    int e = istwopower(x);
-    errs()<<e<<"\n";
-    IRBuilder<> builder(bop);
-    Value *shift = builder.CreateShl(v, e);
-    if(neg)
-        shift = builder.CreateNeg(shift);
-    for (auto& U: bop->uses()){
-        User* user = U.getUser();
-        user->setOperand(U.getOperandNo(), shift);
-    }
-    bop->eraseFromParent();
-}
 
 namespace {
     // https://github.com/thomaslee/llvm-demo/blob/master/main.cc
@@ -134,13 +112,43 @@ namespace {
         Function *printf_func = NULL;
         Value *format = NULL;
         SkeletonPass() : FunctionPass(ID) {}
+        void strengthReduction(BinaryOperator *bop, Constant *c, Value *v){
+            errs()<<"insert\n";
+            int x = c->getUniqueInteger().getLimitedValue();
+            int savings = mul_reduction(x);
+            IRBuilder<> IRB(bop);
+            Value *loadAddr = IRB.CreateLoad(bbCounter);
+            Value *addAddr = IRB.CreateAdd(ConstantInt::get(Type::getInt32Ty(*Context), savings), loadAddr);
+            IRB.CreateStore(addAddr, bbCounter);
+            
+
+            return;
+            //errs()<<x<<"\n";
+            //bool neg=false;
+            //if(x<0){
+            //    neg = true;
+            //    x = -x;
+            //}
+            //int e = istwopower(x);
+            //errs()<<e<<"\n";
+            //IRBuilder<> builder(bop);
+            //Value *shift = builder.CreateShl(v, e);
+            //if(neg)
+            //    shift = builder.CreateNeg(shift);
+            //for (auto& U: bop->uses()){
+            //    User* user = U.getUser();
+            //    user->setOperand(U.getOperandNo(), shift);
+            //}
+            //bop->eraseFromParent();
+        }
         void addFinalPrintf(BasicBlock& BB, LLVMContext *Context, GlobalVariable *bbCounter, GlobalVariable *var, Function *printf_func) {
             IRBuilder<> builder(BB.getTerminator()); // Insert BEFORE the final statement
             std::vector<Constant*> indices;
-            Constant *zero = Constant::getNullValue(IntegerType::getInt32Ty(*Context));
-            indices.push_back(zero);
-            indices.push_back(zero);
-            Constant *var_ref = ConstantExpr::getGetElementPtr(var->getType(), var, indices);
+            //Constant *zero = Constant::getNullValue(IntegerType::getInt32Ty(*Context));
+            //indices.push_back(zero);
+            //indices.push_back(zero);
+            //Constant *var_ref = ConstantExpr::getGetElementPtr(var->getType(), var, indices);
+            format = builder.CreateGlobalStringPtr("!!! %d\n", "str");
 
             Value *bbc = builder.CreateLoad(bbCounter);
             std::vector<Value *> print_args;
@@ -155,11 +163,9 @@ namespace {
             Context = &M.getContext();
             bbCounter = new GlobalVariable(M, Type::getInt32Ty(*Context), false, GlobalValue::InternalLinkage, ConstantInt::get(Type::getInt32Ty(*Context), 0), "bbCounter");
             const char *finalPrintString = "BB Count: %d\n";
-            IRBuilder<> builder(*Context);
-            format = builder.CreateGlobalStringPtr("%d\n", "str");
 
-            Constant *format_const = ConstantDataArray::getString(*Context, finalPrintString);
-            BasicBlockPrintfFormatStr = new GlobalVariable(M, llvm::ArrayType::get(llvm::IntegerType::get(*Context, 8), strlen(finalPrintString)+1), true, llvm::GlobalValue::PrivateLinkage, format_const, "BasicBlockPrintfFormatStr");
+            //Constant *format_const = ConstantDataArray::getString(*Context, finalPrintString);
+            //BasicBlockPrintfFormatStr = new GlobalVariable(M, llvm::ArrayType::get(llvm::IntegerType::get(*Context, 8), strlen(finalPrintString)+1), true, llvm::GlobalValue::PrivateLinkage, format_const, "BasicBlockPrintfFormatStr");
             printf_func = printf_prototype(*Context, &M);
 
             errs() << "Module: " << M.getName() << "\n";

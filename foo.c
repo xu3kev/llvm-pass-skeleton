@@ -1,7 +1,9 @@
 #include<stdio.h>
 int mul(int x){
-    int a = x/10;
-    return a;
+    for(int i=0;i<3;++i){
+        x = x*8;
+    }
+    return x;
 }
 int main(){
     int a = mul(5);
