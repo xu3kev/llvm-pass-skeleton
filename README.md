@@ -13,8 +13,13 @@ Build:
     $ cd ..
 
 Run:
+    $ clang -Xclang -load -Xclang build/skeleton/libSkeletonPass.* something.c
+
+    or
 
     $ clang -S -emit-llvm -Xclang -disable-O0-optnone foo.c
     $ opt -load build/skeleton/libSkeletonPass.* -skeleton -S foo.ll
+
+
     
 The `-Xclang -disable-O0-optnone` flag ensures that Clang will allow later optimizations even when initially compiling without any. 
