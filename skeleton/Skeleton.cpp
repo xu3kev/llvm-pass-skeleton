@@ -157,7 +157,7 @@ namespace {
             //indices.push_back(zero);
             //indices.push_back(zero);
             //Constant *var_ref = ConstantExpr::getGetElementPtr(var->getType(), var, indices);
-            format = builder.CreateGlobalStringPtr("!!! %d %d\n", "str");
+            format = builder.CreateGlobalStringPtr("----- costs: %d , %d\n ------", "str");
 
             Value *bbc = builder.CreateLoad(bbCounter);
             Value *ccc = builder.CreateLoad(ccCounter);
