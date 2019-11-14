@@ -1,9 +1,10 @@
+#include<stdio.h>
 int mul(int x){
-    int a = -32*x;
-    return a*4;
+    int a = x/10;
+    return a;
 }
 int main(){
     int a = mul(5);
-    printf("%d\n",a);
+    //printf("%d\n",a);
     return 0;
 }

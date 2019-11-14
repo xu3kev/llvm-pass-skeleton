@@ -5,6 +5,12 @@
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 
+#include "llvm/IR/Module.h"
+#include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/Support/raw_ostream.h"
+#include "llvm/IR/Type.h"
+
 #include <iostream>
 #include <string>
 #include <vector>
@@ -15,8 +21,8 @@
 using namespace llvm;
 
 // costs is vector of costs of +/-, *, /, <</>>
-std::vector <std::pair <std::string, int> > mul_reduction(unsigned int factor, 
-        std::vector <unsigned int> costs) 
+std::vector<unsigned int> costs = {3,5,10,1};
+int mul_reduction(unsigned int factor) 
 {
     std::vector <std::pair <std::string, int> > result;
 
@@ -56,19 +62,20 @@ std::vector <std::pair <std::string, int> > mul_reduction(unsigned int factor,
     */
 
     if (cost_plus <= cost_minus) {
-        result.push_back(std::make_pair("cost", cost_plus);
+        result.push_back(std::make_pair("cost", cost_plus));
         result.push_back(std::make_pair("=", plus[0]));
         for (int i = 1; i < plus.size(); i ++)
             result.push_back(std::make_pair("+", plus[i]));
     }
     else {
-        result.push_back(std::make_pair("cost", cost_minus);
+        result.push_back(std::make_pair("cost", cost_minus));
         result.push_back(std::make_pair("=", len));
         for (int i = 0; i < plus.size(); i ++)
             result.push_back(std::make_pair("-", plus[i]));
     }
 
-    return result;
+    int ret = costs[1] - result[0].second;
+    return (ret > 0)? ret : 0;
 }
 
 int istwopower(int x){
@@ -85,6 +92,8 @@ int istwopower(int x){
 
 void strengthReduction(BinaryOperator *bop, Constant *c, Value *v){
     int x = c->getUniqueInteger().getLimitedValue();
+    int savings = mul_reduction(x);
+
     errs()<<x<<"\n";
     bool neg=false;
     if(x<0){
@@ -105,15 +114,63 @@ void strengthReduction(BinaryOperator *bop, Constant *c, Value *v){
 }
 
 namespace {
+    // https://github.com/thomaslee/llvm-demo/blob/master/main.cc
+    static Function* printf_prototype(LLVMContext& ctx, Module *mod) {
+        std::vector<Type*> printf_arg_types;
+        printf_arg_types.push_back(Type::getInt8PtrTy(ctx));
+
+        FunctionType* printf_type = FunctionType::get(Type::getInt32Ty(ctx), printf_arg_types, true);
+        Function *func = mod->getFunction("printf");
+        if(!func)
+            func = Function::Create(printf_type, Function::ExternalLinkage, Twine("printf"), mod);
+        func->setCallingConv(CallingConv::C);
+        return func;
+    }
     struct SkeletonPass : public FunctionPass {
         static char ID;
+        LLVMContext *Context;
+        GlobalVariable *bbCounter = NULL;
+        GlobalVariable *BasicBlockPrintfFormatStr = NULL;
+        Function *printf_func = NULL;
         SkeletonPass() : FunctionPass(ID) {}
+        void addFinalPrintf(BasicBlock& BB, LLVMContext *Context, GlobalVariable *bbCounter, GlobalVariable *var, Function *printf_func) {
+            IRBuilder<> builder(BB.getTerminator()); // Insert BEFORE the final statement
+            std::vector<Constant*> indices;
+            Constant *zero = Constant::getNullValue(IntegerType::getInt32Ty(*Context));
+            indices.push_back(zero);
+            indices.push_back(zero);
+            Constant *var_ref = ConstantExpr::getGetElementPtr(var->getType(), var, indices);
+
+            Value *bbc = builder.CreateLoad(bbCounter);
+            std::vector<Value *> print_args;
+            print_args.push_back(var_ref);
+            print_args.push_back(bbc);
+            CallInst *call = builder.CreateCall(printf_func, print_args);
+            call->setTailCall(false);
+            
+        }
+        bool doInitialization(Module &M) {
+            errs() << "\n---------Starting BasicBlockDemo---------\n";
+            Context = &M.getContext();
+            bbCounter = new GlobalVariable(M, Type::getInt32Ty(*Context), false, GlobalValue::InternalLinkage, ConstantInt::get(Type::getInt32Ty(*Context), 0), "bbCounter");
+            const char *finalPrintString = "BB Count: %d\n";
+            Constant *format_const = ConstantDataArray::getString(*Context, finalPrintString);
+            BasicBlockPrintfFormatStr = new GlobalVariable(M, llvm::ArrayType::get(llvm::IntegerType::get(*Context, 8), strlen(finalPrintString)+1), true, llvm::GlobalValue::PrivateLinkage, format_const, "BasicBlockPrintfFormatStr");
+            printf_func = printf_prototype(*Context, &M);
+
+            errs() << "Module: " << M.getName() << "\n";
+
+            return true;
+        }
 
         virtual bool runOnFunction(Function &F) {
             errs() << "I saw a function called " << F.getName() << "!\n";
             bool ret = false;
             for (auto &B : F){
                 errs() << "a block\n";
+                if(F.getName().equals("main") && isa<ReturnInst>(B.getTerminator())) { // major hack?
+                    addFinalPrintf(B, Context, bbCounter, BasicBlockPrintfFormatStr, printf_func);
+                }
                 for (BasicBlock::iterator DI = B.begin(); DI != B.end(); ) {
                     Instruction *I = &*DI++;
                     errs() << "an instruction: " << *I << "\n";
