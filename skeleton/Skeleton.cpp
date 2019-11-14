@@ -169,7 +169,7 @@ namespace {
             call->setTailCall(false);
             
         }
-        bool doInitialization(Module &M) {
+        bool doInitialization(Module &M) override{
             errs() << "\n---------Starting BasicBlockDemo---------\n";
             Context = &M.getContext();
             bbCounter = new GlobalVariable(M, Type::getInt32Ty(*Context), false, GlobalValue::InternalLinkage, ConstantInt::get(Type::getInt32Ty(*Context), 0), "bbCounter");
@@ -185,7 +185,7 @@ namespace {
             return true;
         }
 
-        virtual bool runOnFunction(Function &F) {
+        bool runOnFunction(Function &F) override{
             errs() << "I saw a function called " << F.getName() << "!\n";
             bool ret = false;
             for (auto &B : F){
@@ -232,4 +232,15 @@ namespace {
 char SkeletonPass::ID = 0;
 
 // Register the pass so `opt -skeleton` runs it.
-static RegisterPass<SkeletonPass> X("skeleton", "a useless pass");
+//static RegisterPass<SkeletonPass> X("skeleton", "a useless pass");
+
+// Automatically enable the pass.
+// http://adriansampson.net/blog/clangpass.html
+static RegisterPass<SkeletonPass> X("skeleton", "SkeletonPass",
+                             false /* Only looks at CFG */,
+                             false /* Analysis Pass */);
+
+static RegisterStandardPasses Y(
+    PassManagerBuilder::EP_EarlyAsPossible,
+    [](const PassManagerBuilder &Builder,
+       legacy::PassManagerBase &PM) { PM.add(new SkeletonPass()); });
