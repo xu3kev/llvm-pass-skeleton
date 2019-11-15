@@ -120,6 +120,9 @@ namespace {
         void strengthReduction(BinaryOperator *bop, Constant *c, Value *v){
             errs()<<"insert\n";
             int x = c->getUniqueInteger().getLimitedValue();
+            if(x<0)
+                x = -x;
+              
             std::vector<int> costs = mul_reduction(x);
             IRBuilder<> IRB(bop);
             Value *loadAddr = IRB.CreateLoad(bbCounter);
